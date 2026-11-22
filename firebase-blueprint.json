@@ -1,0 +1,274 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "Registered students, alumni, and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "btId": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "alumni", "faculty", "admin"] },
+        "branch": { "type": "string" },
+        "semester": { "type": "string" },
+        "yearOfStudy": { "type": "string" },
+        "academicTrack": { "type": "string" },
+        "avatar": { "type": "string" },
+        "isPro": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "role"]
+    },
+    "resources": {
+      "title": "Academic Resources & Notes",
+      "description": "PDFs, video lectures, code notes, and study materials",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "type": { "type": "string" },
+        "author": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "authorId": { "type": "string" },
+        "url": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "rating": { "type": "number" },
+        "likesCount": { "type": "number" },
+        "viewCount": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "category", "type", "author"]
+    },
+    "chatGroups": {
+      "title": "WhatsApp-Style Chat Groups",
+      "description": "Study groups and project cohorts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "isPrivate": { "type": "boolean" },
+        "members": { "type": "array" },
+        "adminIds": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "category", "creatorId"]
+    },
+    "groupMessages": {
+      "title": "Group Chat Messages",
+      "description": "Messages sent inside chat groups with code and reactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "groupId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "codeSnippet": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "reactions": { "type": "object" },
+        "replyTo": { "type": "object" }
+      },
+      "required": ["groupId", "senderId", "senderName"]
+    },
+    "directMessages": {
+      "title": "Direct Messages",
+      "description": "Direct peer-to-peer messages between students and alumni",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "codeSnippet": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["senderId", "receiverId", "text"]
+    },
+    "projectCredits": {
+      "title": "Project Credits & Academic Acknowledgements",
+      "description": "HOD information, Faculty Guides, and Student Contributors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hod": { "type": "object" },
+        "facultyGuides": { "type": "array" },
+        "studentContributors": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["hod", "facultyGuides", "studentContributors"]
+    },
+    "announcements": {
+      "title": "Platform Announcements",
+      "description": "Campus notices and broadcast updates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "message"]
+    },
+    "gigs": {
+      "title": "Freelance Student Gigs",
+      "description": "Student work contracts and project milestones",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "budget": { "type": "string" },
+        "category": { "type": "string" },
+        "clientName": { "type": "string" },
+        "postedAt": { "type": "string" }
+      },
+      "required": ["title", "budget", "clientName"]
+    },
+    "liveClasses": {
+      "title": "Live Interactive Lectures",
+      "description": "Live classrooms, interactive seminars, and scheduled review sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "instructor": { "type": "string" },
+        "instructorRole": { "type": "string" },
+        "subject": { "type": "string" },
+        "scheduledTime": { "type": "string" },
+        "duration": { "type": "string" },
+        "isLiveNow": { "type": "boolean" },
+        "attendeesCount": { "type": "number" },
+        "streamUrl": { "type": "string" },
+        "topicsCovered": { "type": "array" }
+      },
+      "required": ["title", "instructor", "subject"]
+    },
+    "bannedUsers": {
+      "title": "Moderation & Disciplinary Action Records",
+      "description": "Student and account disciplinary records managed by campus owners",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "btId": { "type": "string" },
+        "reason": { "type": "string" },
+        "duration": { "type": "string" },
+        "status": { "type": "string", "enum": ["active_ban", "revoked", "warning"] },
+        "bannedAt": { "type": "string" },
+        "bannedBy": { "type": "string" }
+      },
+      "required": ["name", "reason", "status"]
+    },
+    "academicSubjects": {
+      "title": "Curriculum Subjects",
+      "description": "Sequential coursework subjects categorized by year and branch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "branchCode": { "type": "string" },
+        "year": { "type": "string" },
+        "semester": { "type": "string" },
+        "credits": { "type": "number" }
+      },
+      "required": ["code", "name", "branchCode", "year"]
+    },
+    "academicBranches": {
+      "title": "Engineering Branches",
+      "description": "Academic engineering departments and branches",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "totalSemesters": { "type": "number" },
+        "hodName": { "type": "string" }
+      },
+      "required": ["code", "name"]
+    },
+    "collegeStats": {
+      "title": "Campus Overview Statistics",
+      "description": "Official institutional rankings, accreditation, and metrics",
+      "type": "object",
+      "properties": {
+        "naacGrade": { "type": "string" },
+        "nirfRank": { "type": "string" },
+        "totalStudents": { "type": "number" },
+        "facultyCount": { "type": "number" },
+        "placementRate": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Student, alumni, faculty, and administrator profiles"
+    },
+    "/resources/{resourceId}": {
+      "schema": "resources",
+      "description": "Academic notes, downloadable PDFs, and video lectures"
+    },
+    "/chatGroups/{groupId}": {
+      "schema": "chatGroups",
+      "description": "Subject channels, study groups, and project cohort rooms"
+    },
+    "/groupMessages/{messageId}": {
+      "schema": "groupMessages",
+      "description": "Messages sent in collaborative chat groups"
+    },
+    "/directMessages/{dmId}": {
+      "schema": "directMessages",
+      "description": "Peer-to-peer direct messages"
+    },
+    "/projectCredits/{creditId}": {
+      "schema": "projectCredits",
+      "description": "Official institutional project credits and faculty advisors"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "announcements",
+      "description": "Campus notices and broadcast updates"
+    },
+    "/gigs/{gigId}": {
+      "schema": "gigs",
+      "description": "Freelance student marketplace contracts"
+    },
+    "/liveClasses/{classId}": {
+      "schema": "liveClasses",
+      "description": "Scheduled and live interactive video classes"
+    },
+    "/bannedUsers/{banId}": {
+      "schema": "bannedUsers",
+      "description": "Platform disciplinary logs and banned account records"
+    },
+    "/academicSubjects/{subjectId}": {
+      "schema": "academicSubjects",
+      "description": "Departmental subject catalog and course syllabi"
+    },
+    "/academicBranches/{branchCode}": {
+      "schema": "academicBranches",
+      "description": "Department branches and semester definitions"
+    },
+    "/collegeStats/{statsId}": {
+      "schema": "collegeStats",
+      "description": "Institutional metrics, NIRF ranking, and college overview"
+    }
+  }
+}

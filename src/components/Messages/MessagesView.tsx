@@ -1,0 +1,880 @@
+import React, { useState } from 'react';
+import { useApp } from '../../context/AppContext';
+import { DirectMessage } from '../../types';
+import {
+  MessageSquare,
+  Send,
+  Users2,
+  UserPlus,
+  ShieldAlert,
+  ShieldBan,
+  Search,
+  Check,
+  X,
+  Code,
+  Lock,
+  Clock,
+  MessagesSquare,
+  Plus,
+  Heart,
+  Home,
+} from 'lucide-react';
+import { GroupChatTab } from './GroupChatTab';
+import { UserSearchAndSocialTab } from './UserSearchAndSocialTab';
+
+export const MessagesView: React.FC = () => {
+  const {
+    friends,
+    campusDirectoryUsers,
+    directMessages,
+    activeDMUserId,
+    setActiveDMUserId,
+    groups,
+    acceptFriendRequest,
+    declineFriendRequest,
+    cancelFriendRequest,
+    blockUser,
+    unblockUser,
+    sendDirectMessage,
+    startDMWithUser,
+    activeMessagesSubTab,
+    setActiveMessagesSubTab,
+    openReportModal,
+    showToast,
+  } = useApp();
+
+  // Navigation mode: 'groups' | 'dms' | 'search' | 'friends' | 'blocked'
+  const activeTabMode = (activeMessagesSubTab as string) === 'channels' ? 'groups' : activeMessagesSubTab;
+  const setActiveTabMode = setActiveMessagesSubTab;
+
+  // New DM search modal state
+  const [isNewDMSearchModalOpen, setIsNewDMSearchModalOpen] = useState<boolean>(false);
+  const [newDMSearchText, setNewDMSearchText] = useState<string>('');
+
+  // DM Input State
+  const [dmInput, setDmInput] = useState<string>('');
+  const [includeCodeSnippet, setIncludeCodeSnippet] = useState<boolean>(false);
+  const [codeSnippetText, setCodeSnippetText] = useState<string>('');
+
+  // Filter & Search
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Friends categories
+  const activeFriends = friends.filter((f) => f.status === 'friend');
+  const incomingRequests = friends.filter((f) => f.status === 'pending_incoming');
+  const outgoingRequests = friends.filter((f) => f.status === 'pending_outgoing');
+  const blockedFriends = friends.filter((f) => f.status === 'blocked');
+
+  // Currently selected DM user
+  const effectiveActiveUserId = activeDMUserId || (activeFriends.length > 0 ? activeFriends[0].userId : null);
+  const currentDmPartner = friends.find((f) => f.userId === effectiveActiveUserId) || activeFriends[0] || null;
+
+  // Active message stream
+  const activeDmList: DirectMessage[] = currentDmPartner && directMessages[currentDmPartner.userId]
+    ? directMessages[currentDmPartner.userId]
+    : [];
+
+  const handleSendDM = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dmInput.trim() && !codeSnippetText.trim()) return;
+    if (!currentDmPartner) {
+      showToast('Select a friend to start direct messaging');
+      return;
+    }
+
+    sendDirectMessage(
+      currentDmPartner.userId,
+      dmInput.trim(),
+      includeCodeSnippet ? codeSnippetText.trim() : undefined
+    );
+
+    setDmInput('');
+    setCodeSnippetText('');
+    setIncludeCodeSnippet(false);
+  };
+
+  return (
+    <div
+      id="messages-view"
+      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden h-[calc(100vh-130px)] min-h-[580px] flex flex-col animate-in fade-in duration-200"
+    >
+      {/* Top Header Mode Bar */}
+      <div className="p-3 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl">
+          <button
+            onClick={() => setActiveTabMode('groups')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTabMode === 'groups'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+            }`}
+          >
+            <MessagesSquare className="w-3.5 h-3.5" />
+            <span>Chat Groups</span>
+            {groups.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-white/20 text-white text-[10px] rounded-full font-bold">
+                {groups.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTabMode('dms')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTabMode === 'dms'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+            }`}
+          >
+            <Home className="w-3.5 h-3.5" />
+            <span>Home</span>
+            {activeFriends.some((f) => (f.unreadDMsCount || 0) > 0) && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTabMode('search')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTabMode === 'search'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Search & Make Friends</span>
+            <span className="px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-[10px] rounded-full font-bold">
+              {campusDirectoryUsers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTabMode('friends')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTabMode === 'friends'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+            }`}
+            title="Friend Requests"
+          >
+            <Heart
+              className={`w-3.5 h-3.5 ${
+                activeTabMode === 'friends'
+                  ? 'fill-white text-white'
+                  : 'text-rose-500 fill-rose-500/20'
+              }`}
+            />
+            <span>Friend Requests</span>
+            {incomingRequests.length > 0 && (
+              <span
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${
+                  activeTabMode === 'friends'
+                    ? 'bg-white text-rose-600'
+                    : 'bg-rose-500 text-white'
+                }`}
+              >
+                {incomingRequests.length}
+              </span>
+            )}
+          </button>
+
+          {blockedFriends.length > 0 && (
+            <button
+              onClick={() => setActiveTabMode('blocked')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTabMode === 'blocked'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-rose-500'
+              }`}
+            >
+              <ShieldBan className="w-3.5 h-3.5" />
+              <span>Blocked ({blockedFriends.length})</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Mode 0: WhatsApp-style Group Chats */}
+      {activeTabMode === 'groups' && <GroupChatTab />}
+
+      {/* Mode: Search Section - Search Classmates, Make Friends & Private Chat */}
+      {activeTabMode === 'search' && (
+        <UserSearchAndSocialTab
+          onOpenDM={(targetUserId) => {
+            setActiveDMUserId(targetUserId);
+            setActiveTabMode('dms');
+          }}
+        />
+      )}
+
+      {/* Mode 1: Direct Messages */}
+      {activeTabMode === 'dms' && (
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+          {/* Left Column: Direct Message Friends */}
+          <aside className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/60 dark:bg-slate-900/60">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter chats or search names..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 text-xs rounded-xl border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setNewDMSearchText('');
+                  setIsNewDMSearchModalOpen(true);
+                }}
+                className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs transition-colors shadow-2xs shrink-0 flex items-center gap-1"
+                title="Search student name & start private chat"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px] font-semibold">New</span>
+              </button>
+            </div>
+
+            {/* Direct message contact list */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {activeFriends.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 space-y-2">
+                  <UserPlus className="w-8 h-8 mx-auto text-slate-400" />
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">No Connected Friends</p>
+                  <p className="text-[11px]">Search any student by name to start chatting or send friend requests.</p>
+                  <div className="flex flex-col gap-2 mt-3">
+                    <button
+                      onClick={() => setIsNewDMSearchModalOpen(true)}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      <span>Search Classmates by Name</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTabMode('search')}
+                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs transition-colors"
+                    >
+                      Browse Social Directory
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {activeFriends
+                    .filter((f) =>
+                      !searchQuery || (f.name && f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                    )
+                    .map((friend) => {
+                      const isSelected = currentDmPartner?.userId === friend.userId;
+                      const partnerMsgs = directMessages[friend.userId] || [];
+                      const lastMsg = partnerMsgs[partnerMsgs.length - 1];
+
+                      return (
+                        <button
+                          key={friend.id}
+                          onClick={() => setActiveDMUserId(friend.userId)}
+                          className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 relative ${
+                            isSelected
+                              ? 'bg-white dark:bg-slate-800 border border-indigo-500 shadow-xs'
+                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-transparent'
+                          }`}
+                        >
+                          <div className="relative">
+                            <img
+                              src={friend.avatar}
+                              alt={friend.name}
+                              className="w-10 h-10 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+                            />
+                            <span
+                              className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                                friend.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                              }`}
+                            ></span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4
+                                className={`text-xs font-bold truncate ${
+                                  isSelected
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-slate-900 dark:text-white'
+                                }`}
+                              >
+                                {friend.name}
+                              </h4>
+                              <span className="text-[10px] text-slate-400">
+                                {lastMsg?.timestamp || friend.lastSeen || 'Active'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                              {lastMsg?.text || `${friend.branch} • ${friend.academicTrack}`}
+                            </p>
+                          </div>
+
+                          {(friend.unreadDMsCount || 0) > 0 && (
+                            <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-full">
+                              {friend.unreadDMsCount}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setNewDMSearchText('');
+                        setIsNewDMSearchModalOpen(true);
+                      }}
+                      className="w-full py-2 bg-indigo-50/80 hover:bg-indigo-100/80 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Search & Message Any Student</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </aside>
+
+          {/* Quick Search Modal for DM */}
+          {isNewDMSearchModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                      <Search className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Start Private Chat with Any Classmate
+                      </h3>
+                      <p className="text-[10px] text-slate-500">
+                        Search by student name, branch, or skills
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsNewDMSearchModalOpen(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Type student name (e.g. Kavya, Bhavesh, Priya, Manav)..."
+                      value={newDMSearchText}
+                      onChange={(e) => setNewDMSearchText(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 text-xs rounded-xl border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto p-2 space-y-1">
+                  {campusDirectoryUsers
+                    .filter((p) => {
+                      if (!newDMSearchText.trim()) return true;
+                      const q = newDMSearchText.toLowerCase().trim();
+                      return (
+                        p.name.toLowerCase().includes(q) ||
+                        p.branch.toLowerCase().includes(q) ||
+                        p.skills.some((s) => s.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((peer) => {
+                      return (
+                        <div
+                          key={peer.id}
+                          className="p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors flex items-center justify-between gap-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <img
+                                src={peer.avatar}
+                                alt={peer.name}
+                                className="w-9 h-9 rounded-full object-cover"
+                              />
+                              <span
+                                className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                                  peer.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                                }`}
+                              ></span>
+                            </div>
+                            <div className="truncate">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {peer.name}
+                              </h4>
+                              <p className="text-[10px] text-slate-500 truncate">
+                                {peer.branch} • {peer.role}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              startDMWithUser(peer.id, {
+                                name: peer.name,
+                                avatar: peer.avatar,
+                                role: peer.role,
+                                branch: peer.branch,
+                                academicTrack: peer.academicTrack,
+                                bio: peer.bio,
+                              });
+                              setIsNewDMSearchModalOpen(false);
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Chat</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-500">
+                    Want to add new friends or view full profiles?
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsNewDMSearchModalOpen(false);
+                      setActiveTabMode('search');
+                    }}
+                    className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline text-xs"
+                  >
+                    Open Search Section →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Right Column: Active DM Chat Canvas */}
+          <div className="flex-1 flex flex-col bg-white dark:bg-slate-900">
+            {currentDmPartner ? (
+              <>
+                {/* Chat Top Banner */}
+                <div className="p-3.5 px-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/60">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img
+                        src={currentDmPartner.avatar}
+                        alt={currentDmPartner.name}
+                        className="w-9 h-9 rounded-full object-cover"
+                      />
+                      <span
+                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                          currentDmPartner.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`}
+                      ></span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                          {currentDmPartner.name}
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold capitalize">
+                          {currentDmPartner.role}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        {currentDmPartner.branch} • {currentDmPartner.academicTrack}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() =>
+                        openReportModal({
+                          id: currentDmPartner.userId,
+                          title: `Student User & Chat: ${currentDmPartner.name}`,
+                          type: 'user',
+                        })
+                      }
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors text-xs flex items-center gap-1"
+                      title="Report inappropriate user or message"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Report</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Block ${currentDmPartner.name}? They will no longer be able to message you.`)) {
+                          blockUser(currentDmPartner.userId, currentDmPartner.name);
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors text-xs flex items-center gap-1"
+                      title="Block user"
+                    >
+                      <ShieldBan className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Block</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Message Stream */}
+                <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 bg-slate-50/40 dark:bg-slate-950/40">
+                  <div className="p-2.5 bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-center text-[11px] text-indigo-700 dark:text-indigo-300 flex items-center justify-center gap-1.5">
+                    <Lock className="w-3 h-3" />
+                    <span>Direct Message Channel • Campus Verified Peer Identity</span>
+                  </div>
+
+                  {activeDmList.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-slate-500">
+                      <p>Start a conversation with {currentDmPartner.name}!</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Discuss coursework, collaboration on freelance gigs, or share code snippets.
+                      </p>
+                    </div>
+                  ) : (
+                    activeDmList.map((msg) => {
+                      const isMe = msg.isCurrentUser;
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                        >
+                          <img
+                            src={msg.senderAvatar}
+                            alt={msg.senderName}
+                            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200 dark:ring-slate-700"
+                          />
+                          <div className={`flex flex-col max-w-[80%] ${isMe ? 'items-end' : 'items-start'}`}>
+                            <div className="flex items-baseline gap-2 mb-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {isMe ? 'You' : msg.senderName}
+                              </span>
+                              <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
+                            </div>
+
+                            <div
+                              className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
+                                isMe
+                                  ? 'bg-indigo-600 text-white shadow-xs rounded-tr-xs'
+                                  : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-2xs rounded-tl-xs'
+                              }`}
+                            >
+                              <p className="whitespace-pre-wrap">{msg.text}</p>
+
+                              {msg.codeSnippet && (
+                                <div className="mt-2 pt-2 border-t border-white/20 dark:border-slate-700">
+                                  <div className="flex items-center justify-between text-[10px] mb-1 font-mono opacity-80">
+                                    <span>Code Attachment:</span>
+                                    <span>TypeScript / Python</span>
+                                  </div>
+                                  <pre className="p-2.5 rounded-lg bg-slate-950 text-slate-200 font-mono text-[11px] overflow-x-auto">
+                                    {msg.codeSnippet}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* DM Composer */}
+                <form
+                  onSubmit={handleSendDM}
+                  className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2"
+                >
+                  {includeCodeSnippet && (
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span className="flex items-center gap-1 font-mono font-semibold text-indigo-400">
+                          <Code className="w-3.5 h-3.5" /> Attach Code Snippet
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIncludeCodeSnippet(false)}
+                          className="hover:text-white"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={codeSnippetText}
+                        onChange={(e) => setCodeSnippetText(e.target.value)}
+                        placeholder="Paste functions, schemas, or algorithms..."
+                        className="w-full text-xs font-mono bg-transparent text-emerald-400 placeholder:text-slate-600 focus:outline-hidden resize-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIncludeCodeSnippet(!includeCodeSnippet)}
+                      className={`p-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 ${
+                        includeCodeSnippet
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                      }`}
+                      title="Attach code snippet"
+                    >
+                      <Code className="w-4 h-4" />
+                    </button>
+
+                    <input
+                      type="text"
+                      placeholder={`Send direct message to ${currentDmPartner.name}...`}
+                      value={dmInput}
+                      onChange={(e) => setDmInput(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500"
+                    />
+
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center gap-1.5 transition-colors active:scale-98"
+                    >
+                      <span>Send</span>
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
+                <Users2 className="w-12 h-12 text-slate-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Select a Classmate to Chat
+                </h3>
+                <p className="text-xs max-w-xs">
+                  Connect with students and alumni from your department to exchange project insights.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      setNewDMSearchText('');
+                      setIsNewDMSearchModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Search Classmates by Name</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTabMode('search')}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
+                  >
+                    Explore Search & Make Friends
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mode 2: Friend Requests */}
+      {activeTabMode === 'friends' && (
+        <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/50 dark:bg-slate-950/40">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-2xs">
+                <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Friend Requests
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Review incoming classmate connection requests and manage sent invitations
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTabMode('search')}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs self-start sm:self-auto"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Find Classmates</span>
+            </button>
+          </div>
+
+          {/* Incoming Friend Requests */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-xs">
+              <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
+              <span>Incoming Friend Requests ({incomingRequests.length})</span>
+            </div>
+
+            {incomingRequests.length === 0 ? (
+              <div className="p-10 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="w-12 h-12 mx-auto rounded-full bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center">
+                  <Heart className="w-6 h-6 text-rose-400" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                    No Pending Friend Requests
+                  </h4>
+                  <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                    When classmates send you a friend request, it will appear here for you to accept or decline.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTabMode('search')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs shadow-xs inline-flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Search & Make Friends</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {incomingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 shadow-xs flex flex-col justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={req.avatar}
+                        alt={req.name}
+                        className="w-11 h-11 rounded-full object-cover ring-2 ring-rose-500/20"
+                      />
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {req.name}
+                        </h4>
+                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold capitalize">
+                          {req.role}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">{req.branch}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        onClick={() => acceptFriendRequest(req.userId)}
+                        className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs flex items-center justify-center gap-1 shadow-2xs"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Accept</span>
+                      </button>
+                      <button
+                        onClick={() => declineFriendRequest(req.userId)}
+                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-600 dark:text-slate-300 hover:text-rose-600 rounded-xl text-xs font-semibold"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Outgoing / Sent Friend Requests */}
+          {outgoingRequests.length > 0 && (
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-xs">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span>Sent Friend Requests ({outgoingRequests.length})</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {outgoingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={req.avatar}
+                        alt={req.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {req.name}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {req.role} • {req.branch}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => cancelFriendRequest(req.userId)}
+                      className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-xs font-semibold shrink-0 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+
+
+      {/* Mode 4: Blocked Users */}
+      {activeTabMode === 'blocked' && (
+        <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-950/40">
+          <div className="p-4 bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
+            <ShieldBan className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="text-xs">
+              <h3 className="font-bold text-rose-900 dark:text-rose-300">
+                Blocked Students & Restricted Contacts
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400">
+                Blocked users cannot view your online presence, send friend requests, or exchange direct messages with you.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {blockedFriends.map((blocked) => (
+              <div
+                key={blocked.id}
+                className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={blocked.avatar}
+                    alt={blocked.name}
+                    className="w-10 h-10 rounded-full object-cover grayscale"
+                  />
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      {blocked.name}
+                    </h4>
+                    <span className="text-[10px] text-slate-400">{blocked.branch}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => unblockUser(blocked.userId)}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Unblock
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

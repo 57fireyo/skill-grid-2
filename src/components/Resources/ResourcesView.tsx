@@ -1,0 +1,704 @@
+import React, { useState, useMemo } from 'react';
+import { useApp } from '../../context/AppContext';
+import { ResourceItem, ResourceType } from '../../types';
+import { Breadcrumb } from '../Navigation/Breadcrumb';
+import { ManageAcademicStructureModal } from './ManageAcademicStructureModal';
+import { AddAcademicResourceModal } from './AddAcademicResourceModal';
+import { getYouTubeVideoId } from '../../lib/youtube';
+import { openPdfInNewTab, downloadPdfFile } from '../../lib/pdfHelper';
+import {
+  ACADEMIC_YEARS,
+  isYearMatch,
+} from '../../lib/academicHelper';
+import {
+  BookOpen,
+  FileText,
+  PlayCircle,
+  Bookmark,
+  BookmarkCheck,
+  Search,
+  ExternalLink,
+  Sparkles,
+  ArrowRight,
+  Filter,
+  Eye,
+  Star,
+  Globe,
+  PlusCircle,
+  Crown,
+  Trash2,
+  Lock,
+  Heart,
+  ShieldAlert,
+  Download,
+  Settings2,
+  Video,
+  Code2,
+  Layers,
+} from 'lucide-react';
+
+export const ResourcesView: React.FC = () => {
+  const {
+    resources,
+    academicSubjects,
+    academicBranches,
+    academicYears,
+    resourceCategoryFilter,
+    setResourceCategoryFilter,
+    toggleSaveResource,
+    toggleLikeResource,
+    setViewingResource,
+    openReportModal,
+    setActiveTab,
+    isOwner,
+    deleteResource,
+    setIsSecretOwnerModalOpen,
+    showToast,
+    addActivityHistory,
+  } = useApp();
+
+  // Academic Search & Hierarchy Filters (Year, Subject, Unit, Type) - NO "All Years"
+  const [selectedYear, setSelectedYear] = useState<string>('2nd Year');
+  const [selectedSubject, setSelectedSubject] = useState<string>('All');
+  const [selectedUnit, setSelectedUnit] = useState<string>('All');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'pdf' | 'Video Lectures' | 'Articles'>('all');
+  const [localSearch, setLocalSearch] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'rating' | 'likes'>('newest');
+  const [onlySaved, setOnlySaved] = useState<boolean>(false);
+
+  // Modals state
+  const [isStructureModalOpen, setIsStructureModalOpen] = useState<boolean>(false);
+  const [isAddResourceModalOpen, setIsAddResourceModalOpen] = useState<boolean>(false);
+
+  const unitsList = ['All', 'Unit 1', 'Unit 2', 'Unit 3', 'Unit 4', 'Unit 5', 'Unit 6'];
+
+  // Subjects filtered strictly by current year selection
+  const availableSubjects = useMemo(() => {
+    return academicSubjects.filter((subj) =>
+      isYearMatch(subj.year, subj.academicYear, selectedYear)
+    );
+  }, [academicSubjects, selectedYear]);
+
+  // Overall filtering strictly constrained to the chosen Year section
+  const filtered = resources.filter((item) => {
+    // 1. Strict Year check: 2nd Year only shows in 2nd Year section, 1st Year in 1st Year, etc.
+    const matchesYear = isYearMatch(item.year, item.academicYear, selectedYear);
+    if (!matchesYear) return false;
+
+    // 2. Subject check (All or case-insensitive matching)
+    const matchesSubject =
+      selectedSubject === 'All' ||
+      (item.subjectCode && item.subjectCode.toLowerCase() === selectedSubject.toLowerCase());
+    if (!matchesSubject) return false;
+
+    // 4. Syllabus Unit check
+    const matchesUnit = selectedUnit === 'All' || (item.unitOrModule && item.unitOrModule.toLowerCase().includes(selectedUnit.toLowerCase()));
+    if (!matchesUnit) return false;
+
+    // 5. Resource type filter
+    const isItemVideo = item.type === 'Video Lectures' || item.type === 'video' || !!item.videoUrl;
+    const matchesType =
+      typeFilter === 'all' ||
+      (typeFilter === 'pdf' && (item.type === 'pdf' || item.type === 'Notes')) ||
+      (typeFilter === 'Video Lectures' && isItemVideo) ||
+      (typeFilter === 'Articles' && (item.type === 'article' || item.type === 'code' || item.type === 'Articles'));
+    if (!matchesType) return false;
+
+    // 6. Bookmarked only
+    const matchesSaved = !onlySaved || item.saved;
+    if (!matchesSaved) return false;
+
+    // 7. Search text query
+    const query = localSearch.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      (item.title && item.title.toLowerCase().includes(query)) ||
+      (item.description && item.description.toLowerCase().includes(query)) ||
+      (item.subjectCode && item.subjectCode.toLowerCase().includes(query)) ||
+      (item.author && item.author.toLowerCase().includes(query)) ||
+      (item.semester && item.semester.toLowerCase().includes(query)) ||
+      (item.unitOrModule && item.unitOrModule.toLowerCase().includes(query)) ||
+      (item.tags && item.tags.some((t) => t && t.toLowerCase().includes(query)));
+
+    return matchesSearch;
+  });
+
+  // Sorting
+  const sortedResources = [...filtered].sort((a, b) => {
+    if (sortBy === 'newest') {
+      const timeA = parseInt((a.id || '').replace(/^res-/, '')) || 0;
+      const timeB = parseInt((b.id || '').replace(/^res-/, '')) || 0;
+      if (timeA || timeB) return timeB - timeA;
+      return 0;
+    }
+    if (sortBy === 'popular') return (b.viewCount || 0) - (a.viewCount || 0);
+    if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+    if (sortBy === 'likes') return (b.likesCount || 0) - (a.likesCount || 0);
+    return 0;
+  });
+
+  // Breadcrumb items calculation
+  const breadcrumbItems = [
+    { label: 'Study Library' },
+    { label: selectedYear, onClick: () => { setSelectedSubject('All'); setSelectedUnit('All'); } },
+    ...(selectedSubject !== 'All' ? [{ label: selectedSubject, onClick: () => setSelectedUnit('All') }] : []),
+    ...(selectedUnit !== 'All' ? [{ label: selectedUnit }] : []),
+  ];
+
+  return (
+    <div id="resources-view" className="space-y-6 animate-in fade-in duration-200 pb-12 bg-white">
+      {/* Explicit Breadcrumb Navigation */}
+      <Breadcrumb category="Academic Portal" items={breadcrumbItems} />
+
+      {/* Owner Mode Interactive Academic Control Toolbar */}
+      {isOwner ? (
+        <div
+          id="owner-academic-control-toolbar"
+          className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-indigo-500/10 to-amber-500/5 border border-amber-400/40 dark:border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-xs">
+              <Crown className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                  Owner Academic Control Center
+                </h2>
+                <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Add, edit, or configure course subjects (e.g. DSA, CAN, ISE), branch curricula, and upload verified study material.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              id="owner-manage-structure-btn"
+              onClick={() => setIsStructureModalOpen(true)}
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              <span>Manage Academic Structure</span>
+            </button>
+
+            <button
+              id="owner-upload-material-btn"
+              onClick={() => setIsAddResourceModalOpen(true)}
+              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>+ Upload Course Material</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Academic Curriculum Repository
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Browse verified lecture notes, laboratory PDFs, and video sessions across all 4 engineering years.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAddResourceModalOpen(true)}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Contribute Material</span>
+            </button>
+
+            <button
+              onClick={() => setIsSecretOwnerModalOpen(true)}
+              className="p-1.5 text-slate-400 hover:text-amber-500 rounded-lg transition-colors"
+              title="Owner Mode Login"
+            >
+              <Crown className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sequential Filter Architecture */}
+      <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-xs">
+        {/* Level 1: Year Selector (NO "All Years") */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-500" />
+              <span>1. Academic Year Section</span>
+            </span>
+            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+              Active: {selectedYear}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {ACADEMIC_YEARS.map((yr) => {
+              const isSelected = selectedYear === yr;
+              return (
+                <button
+                  key={yr}
+                  onClick={() => {
+                    setSelectedYear(yr);
+                    setSelectedSubject('All');
+                    setSelectedUnit('All');
+                  }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-500/20'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Layers className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{yr}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Level 2: Subject Selection (DSA, CAN, ISE, etc.) */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+              <span>2. Course Subject ({selectedYear})</span>
+            </span>
+            {isOwner && (
+              <button
+                onClick={() => setIsStructureModalOpen(true)}
+                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+              >
+                <PlusCircle className="w-3 h-3" />
+                <span>Add Subject</span>
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSelectedSubject('All')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedSubject === 'All'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              All {selectedYear} Subjects
+            </button>
+            {availableSubjects.map((subj) => (
+              <button
+                key={subj.id}
+                onClick={() => setSelectedSubject(subj.code)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedSubject === subj.code
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span className="font-mono">{subj.code}</span>
+                <span className="font-normal text-[11px] opacity-80 hidden sm:inline truncate max-w-[120px]">
+                  {subj.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Level 3: Syllabus Unit / Module */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-500" />
+              <span>3. Syllabus Unit / Module</span>
+            </span>
+            {selectedUnit !== 'All' && (
+              <button
+                onClick={() => setSelectedUnit('All')}
+                className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Reset Unit
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {unitsList.map((unit) => (
+              <button
+                key={unit}
+                onClick={() => setSelectedUnit(unit)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  selectedUnit === unit
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {unit === 'All' ? 'All Units' : unit}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Level 5: Search Bar & Format Tabs */}
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3">
+          {/* Format Tabs (Without Notes heading) */}
+          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+            {[
+              { id: 'all', label: 'All Formats', icon: Layers },
+              { id: 'pdf', label: 'PDFs & Previous Year Papers', icon: FileText },
+              { id: 'Video Lectures', label: 'Video Lectures', icon: Video },
+              { id: 'Articles', label: 'Code & Snippets', icon: Code2 },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = typeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setTypeFilter(tab.id as any)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Input & Sort */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search subject, unit, question papers..."
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+
+            <button
+              onClick={() => setOnlySaved(!onlySaved)}
+              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                onlySaved
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+              title="Show Bookmarked Only"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Resources Feed */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              Course Material Library
+            </h2>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {sortedResources.length} items
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-transparent text-slate-700 dark:text-slate-300 font-semibold focus:outline-hidden cursor-pointer"
+            >
+              <option value="newest">Recently Added</option>
+              <option value="popular">Most Popular</option>
+              <option value="rating">Top Rated</option>
+              <option value="likes">Most Liked</option>
+            </select>
+          </div>
+        </div>
+
+        {sortedResources.length === 0 ? (
+          <div className="text-center py-16 px-4 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
+            <BookOpen className="w-10 h-10 text-slate-400 mx-auto" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              No course materials found for this selection
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Try adjusting your Year, Subject, or Unit filters, or upload a new resource.
+            </p>
+            <button
+              onClick={() => setIsAddResourceModalOpen(true)}
+              className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-colors inline-flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Add Resource Here</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {sortedResources.map((item) => (
+              <article
+                key={item.id}
+                className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800/90 hover:border-indigo-400 dark:hover:border-indigo-500/50 transition-all shadow-xs hover:shadow-md flex flex-col overflow-hidden"
+              >
+                {/* Visual Top Banner */}
+                <div className="p-4 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-slate-50 dark:to-slate-800/30 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-indigo-600 text-white shadow-xs">
+                        {item.subjectCode || 'DSA'}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                        {item.academicYear || '2nd Year'}{item.unitOrModule ? ` • ${item.unitOrModule}` : ''}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                      {item.type === 'Video Lectures' ? <Video className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
+                      <span>{(item.type === 'pdf' || item.type === 'Notes') ? 'PDF Paper' : item.type === 'Video Lectures' ? 'Video Lecture' : 'Code / Snippet'}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {isOwner && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Delete "${item.title}"?`)) {
+                            deleteResource(item.id);
+                            showToast(`Deleted resource: ${item.title}`);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                        title="Delete Material (Owner Mode)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSaveResource(item.id);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      {item.saved ? (
+                        <BookmarkCheck className="w-4 h-4 text-indigo-600" />
+                      ) : (
+                        <Bookmark className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content Body */}
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                  <div>
+                    <h3
+                      onClick={() => setViewingResource(item)}
+                      className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors cursor-pointer line-clamp-2"
+                    >
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mt-1.5 leading-relaxed">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  {/* YouTube Video Lecture Player & Direct Watch Link */}
+                  {(item.type === 'Video Lectures' || item.type === 'video' || !!item.videoUrl) && (() => {
+                    const videoId = getYouTubeVideoId(item.videoUrl || item.url);
+                    return (
+                      <div className="space-y-2 pt-1">
+                        <a
+                          href={`https://www.youtube.com/watch?v=${videoId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:underline text-xs font-semibold inline-flex items-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addActivityHistory({
+                              type: 'class',
+                              title: item.title,
+                              subtitle: `Watched Video Lecture on YouTube • ${item.subjectCode || 'Academic'}`,
+                              metadata: { url: `https://www.youtube.com/watch?v=${videoId}` }
+                            });
+                          }}
+                        >
+                          Watch Video on YouTube
+                        </a>
+
+                        <div className="aspect-video w-full max-w-2xl overflow-hidden rounded-lg bg-black border border-slate-200 dark:border-slate-800 shadow-sm">
+                          <iframe
+                            className="w-full h-full"
+                            src={`https://www.youtube.com/embed/${videoId}`}
+                            title={item.title || 'YouTube video player'}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          ></iframe>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Format details pill */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      {item.type === 'Video Lectures' ? (
+                        <span className="font-medium text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                          <PlayCircle className="w-3.5 h-3.5" />
+                          <span>{item.videoDuration || item.duration || '45 min'}</span>
+                        </span>
+                      ) : (
+                        <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>{item.fileSize || `${item.pageCount || 24} Pages`}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 text-amber-500 font-bold">
+                      <Star className="w-3 h-3 fill-amber-400" />
+                      <span>{item.rating || 5.0}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleLikeResource(item.id);
+                      }}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
+                        item.isLiked
+                          ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 font-bold'
+                          : 'text-slate-500 hover:text-rose-500'
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${item.isLiked ? 'fill-rose-500' : ''}`} />
+                      <span>{item.likesCount || 0}</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      {item.type === 'Video Lectures' || item.type === 'video' || !!item.videoUrl ? (
+                        <a
+                          href={`https://www.youtube.com/watch?v=${getYouTubeVideoId(item.videoUrl || item.url)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-700 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+                          title="Open directly on YouTube"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addActivityHistory({
+                              type: 'class',
+                              title: item.title,
+                              subtitle: `Watched Video Lecture on YouTube • ${item.subjectCode || 'Academic'}`,
+                              metadata: { url: `https://www.youtube.com/watch?v=${getYouTubeVideoId(item.videoUrl || item.url)}` },
+                            });
+                          }}
+                        >
+                          <PlayCircle className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">YouTube</span>
+                        </a>
+                      ) : (() => {
+                        const rawUrl = item.fileUrl || item.downloadUrl || item.url || '/dsa-all-practicals.pdf';
+                        const activePdfUrl = rawUrl.includes('slosofqdfxelmonorspt') ? '/dsa-all-practicals.pdf' : rawUrl;
+                        const docName = item.fileName || `${item.title}.pdf`;
+
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPdfInNewTab(activePdfUrl, docName);
+                                addActivityHistory({
+                                  type: 'download',
+                                  title: item.title,
+                                  subtitle: `Reviewed ${item.type.toUpperCase()} in new tab`,
+                                  metadata: { fileUrl: activePdfUrl },
+                                });
+                              }}
+                              className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Review / Open PDF in new tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline text-[11px]">Review</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadPdfFile(activePdfUrl, docName);
+                                showToast(`Downloading "${docName}"...`);
+                                addActivityHistory({
+                                  type: 'download',
+                                  title: item.title,
+                                  subtitle: `Downloaded ${item.type.toUpperCase()} • ${item.subjectCode || 'Academic'}`,
+                                  metadata: { fileUrl: activePdfUrl },
+                                });
+                              }}
+                              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Download PDF"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        );
+                      })()}
+                      <button
+                        onClick={() => setViewingResource(item)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-2xs active:scale-98 cursor-pointer"
+                      >
+                        <span>{item.type === 'Video Lectures' ? 'Watch Lecture' : 'Open Material'}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Modals */}
+      <ManageAcademicStructureModal
+        isOpen={isStructureModalOpen}
+        onClose={() => setIsStructureModalOpen(false)}
+      />
+
+      <AddAcademicResourceModal
+        isOpen={isAddResourceModalOpen}
+        onClose={() => setIsAddResourceModalOpen(false)}
+        defaultYear={selectedYear}
+        defaultBranch="CY"
+        defaultSubject={selectedSubject !== 'All' ? selectedSubject : availableSubjects[0]?.code || 'DSA'}
+        onUploaded={(details) => {
+          setSelectedYear(details.year);
+          setSelectedSubject(details.subjectCode);
+          setSelectedUnit('All');
+          setSortBy('newest');
+        }}
+      />
+    </div>
+  );
+};

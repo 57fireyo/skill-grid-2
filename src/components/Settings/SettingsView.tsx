@@ -1,0 +1,860 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
+import { useTheme } from '../../context/ThemeContext';
+import { avatarPresets } from '../../mockData';
+import {
+  User,
+  Shield,
+  BookOpen,
+  Save,
+  Sparkles,
+  CheckCircle2,
+  GraduationCap,
+  KeyRound,
+  Crown,
+  Moon,
+  Sun,
+  Monitor,
+  Bell,
+  Sliders,
+  Database,
+  ExternalLink,
+  Lock,
+  LogOut,
+  RefreshCw,
+  Award,
+  Users,
+  Camera,
+  Upload,
+  X,
+  Check,
+  Link2,
+} from 'lucide-react';
+import { CreditsSection } from '../Credits/CreditsSection';
+
+function resizeImageFileToDataUrl(file: File, maxSize = 320): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (!result) {
+        reject(new Error('Empty image data'));
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => resolve(result);
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width || maxSize, img.height || maxSize));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(result);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } catch {
+          resolve(result);
+        }
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export const SettingsView: React.FC = () => {
+  const { user, updateUser, updateAvatar, toggleRole, logout } = useAuth();
+  const {
+    isOwner,
+    setIsSecretOwnerModalOpen,
+    setActiveTab,
+    setIsProModalOpen,
+    setIsAuthModalOpen,
+    showToast,
+  } = useApp();
+
+  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'credits' | 'appearance' | 'owner' | 'notifications' | 'privacy'>('profile');
+
+  // Form State
+  const [name, setName] = useState(user?.name || 'Aarav Sharma');
+  const [email, setEmail] = useState(user?.email || 'aarav.sharma@eduhub.edu');
+  const [btId, setBtId] = useState(user?.btId || 'BT22CS089');
+  const [branch, setBranch] = useState(user?.branch || 'Computer Science & Engineering');
+  const [bio, setBio] = useState(user?.bio || '');
+  const [skillsStr, setSkillsStr] = useState((user?.skills || []).join(', '));
+  const [hourlyRate, setHourlyRate] = useState(user?.hourlyRate?.toString() || '1500');
+
+  // Avatar Picker / Upload Modal State
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local form state when user profile updates (e.g., Firestore sync or modal save)
+  useEffect(() => {
+    setName(user?.name || 'Aarav Sharma');
+    setEmail(user?.email || 'aarav.sharma@eduhub.edu');
+    setBtId(user?.btId || 'BT22CS089');
+    setBranch(user?.branch || 'Computer Science & Engineering');
+    setBio(user?.bio || '');
+    setSkillsStr((user?.skills || []).join(', '));
+    setHourlyRate(user?.hourlyRate?.toString() || '1500');
+    setAvatarPreview(user?.avatar || '');
+  }, [user]);
+
+  // Theme & Preferences State
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const [notifyGigs, setNotifyGigs] = useState(true);
+  const [notifyClasses, setNotifyClasses] = useState(true);
+  const [notifyMentors, setNotifyMentors] = useState(true);
+
+  const applyAvatarChange = (nextUrl: string) => {
+    setAvatarPreview(nextUrl);
+    updateAvatar(nextUrl);
+    fetch('/api/users/profile/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, avatarUrl: nextUrl }),
+    }).catch(() => {});
+    showToast('Profile picture updated!');
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file (PNG, JPG, WEBP).');
+      return;
+    }
+    setIsUploadingAvatar(true);
+    try {
+      const dataUrl = await resizeImageFileToDataUrl(file);
+      applyAvatarChange(dataUrl);
+    } catch {
+      showToast('Could not read the selected image file.');
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleApplyCustomAvatarUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = customAvatarUrl.trim();
+    if (!trimmed) return;
+    applyAvatarChange(trimmed);
+    setCustomAvatarUrl('');
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateUser({
+      name,
+      email,
+      btId,
+      branch,
+      bio,
+      hourlyRate: parseInt(hourlyRate, 10) || 1500,
+      skills: (skillsStr || '').split(',').map((s) => s.trim()).filter(Boolean),
+    });
+    showToast('Settings and profile updated successfully!');
+  };
+
+  return (
+    <div id="settings-view" className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-200">
+      {/* Header Banner */}
+      <header className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Settings & Preferences</h1>
+            {isOwner && (
+              <span className="bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 font-extrabold text-[10px] px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700 flex items-center gap-1">
+                <Crown className="w-3 h-3 text-amber-500" />
+                OWNER MODE ACTIVE
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+            Configure your student identity, appearance, role permissions, notification preferences, and administrative controls.
+          </p>
+        </div>
+
+        {/* Quick Owner Action or Pro Status */}
+        <div className="flex items-center gap-2">
+          {isOwner ? (
+            <button
+              onClick={() => setActiveTab('owner-portal')}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-98"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>Go to Owner Portal</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsSecretOwnerModalOpen(true)}
+              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-all"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+              <span>Owner Access</span>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Settings Navigation Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 space-x-2 overflow-x-auto pb-1">
+        <button
+          onClick={() => setActiveSubTab('profile')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'profile'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" />
+          <span>Profile & Academic Details</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('credits')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'credits'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-amber-500" />
+          <span>Project Credits & HOD</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('appearance')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'appearance'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>Appearance & Theme</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('owner')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'owner'
+              ? 'bg-amber-500 text-slate-950 shadow-xs'
+              : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 hover:bg-amber-100'
+          }`}
+        >
+          <Crown className="w-3.5 h-3.5" />
+          <span>Owner & Admin Settings</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('notifications')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'notifications'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          <span>Notifications</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('privacy')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'privacy'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>Security & Account</span>
+        </button>
+      </div>
+
+      {/* Tab 1: Profile Form */}
+      {activeSubTab === 'profile' && (
+        <form onSubmit={handleSave} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          {/* Profile Card & Avatar */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <img
+                  src={avatarPreview || user.avatar}
+                  alt={name || user.name}
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500 shadow-xs cursor-pointer transition-opacity hover:opacity-90"
+                />
+                <button
+                  id="edit-avatar-btn"
+                  type="button"
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  title="Change profile picture"
+                  aria-label="Change profile picture"
+                  className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white border-2 border-white dark:border-slate-900 shadow-md flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <Camera className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">{name || user.name}</h2>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">{btId || user.btId}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{user.academicTrack}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleRole();
+                  showToast(`Role switched to ${user.role === 'student' ? 'Alumni' : 'Student'}`);
+                }}
+                className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1.5"
+              >
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Switch to {user.role === 'student' ? 'Alumni' : 'Student'} Role</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsProModalOpen(true)}
+                className="px-3.5 py-2 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>{user.isPro ? 'Pro Membership Active' : 'Upgrade to Pro'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Inputs Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                College Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Student BT ID / Roll Number
+              </label>
+              <input
+                type="text"
+                value={btId}
+                onChange={(e) => setBtId(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Department / Branch
+              </label>
+              <input
+                type="text"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Freelance Hourly Rate (INR ₹)
+              </label>
+              <input
+                type="number"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Skills & Tech Stack (comma-separated for smart gig matching)
+              </label>
+              <input
+                type="text"
+                value={skillsStr}
+                onChange={(e) => setSkillsStr(e.target.value)}
+                placeholder="e.g. React, TypeScript, Python, Node.js, Tailwind CSS, PostgreSQL, Docker"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Bio & Client Portfolio Pitch
+              </label>
+              <textarea
+                rows={3}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs flex items-center gap-1.5 active:scale-98 transition-all"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab: Project Credits & Contributors */}
+      {activeSubTab === 'credits' && (
+        <div className="space-y-6">
+          <CreditsSection showOwnerEditButton={true} />
+        </div>
+      )}
+
+      {/* Tab 2: Appearance & Theme */}
+      {activeSubTab === 'appearance' && (
+        <div className="bg-white dark:bg-[#1B1B22] p-6 rounded-2xl border border-slate-200 dark:border-[#30303A] shadow-xs space-y-6">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-[#F5F5F7]">Theme & Interface</h2>
+            <p className="text-xs text-slate-500 dark:text-[#A1A1AA]">
+              Customize the visual display across the application. Choices persist across reloads.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Light Mode */}
+            <div
+              onClick={() => {
+                setTheme('light');
+                showToast('☀️ Light mode enabled');
+              }}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                theme === 'light'
+                  ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                  : 'border-slate-200 dark:border-[#30303A] hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-[#111114]/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
+                  <Sun className="w-5 h-5" />
+                </div>
+                <input
+                  type="radio"
+                  name="theme_choice"
+                  checked={theme === 'light'}
+                  onChange={() => setTheme('light')}
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-[#F5F5F7]">Light Mode</h3>
+                <p className="text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">
+                  Crisp daylight reading view with soft lavender highlights
+                </p>
+              </div>
+            </div>
+
+            {/* Dark Mode */}
+            <div
+              onClick={() => {
+                setTheme('dark');
+                showToast('🌙 Dark mode enabled');
+              }}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                theme === 'dark'
+                  ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                  : 'border-slate-200 dark:border-[#30303A] hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-[#111114]/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-slate-900 text-indigo-400 border border-slate-700">
+                  <Moon className="w-5 h-5" />
+                </div>
+                <input
+                  type="radio"
+                  name="theme_choice"
+                  checked={theme === 'dark'}
+                  onChange={() => setTheme('dark')}
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-[#F5F5F7]">Dark Mode</h3>
+                <p className="text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">
+                  High-contrast dark canvas (#111114 / #1B1B22) for night study
+                </p>
+              </div>
+            </div>
+
+            {/* System Preference */}
+            <div
+              onClick={() => {
+                setTheme('system');
+                showToast('💻 System theme preference synchronized');
+              }}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                theme === 'system'
+                  ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                  : 'border-slate-200 dark:border-[#30303A] hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-[#111114]/50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  <Monitor className="w-5 h-5" />
+                </div>
+                <input
+                  type="radio"
+                  name="theme_choice"
+                  checked={theme === 'system'}
+                  onChange={() => setTheme('system')}
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-[#F5F5F7]">System Preference</h3>
+                <p className="text-xs text-slate-500 dark:text-[#A1A1AA] mt-0.5">
+                  Automatically syncs with your device / OS appearance setting ({resolvedTheme})
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Owner & Admin Settings */}
+      {activeSubTab === 'owner' && (
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-xs space-y-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-amber-500 text-slate-950">
+                <Crown className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Platform Owner & Content Administration</h2>
+                <p className="text-xs text-slate-500">
+                  Manage academic content, upload PDFs, curate external links, and broadcast campus announcements.
+                </p>
+              </div>
+            </div>
+
+            {isOwner ? (
+              <span className="px-3 py-1 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 rounded-full text-xs font-bold">
+                ✓ Authenticated
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-full text-xs font-semibold">
+                Locked
+              </span>
+            )}
+          </div>
+
+          <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-3">
+            <div className="flex items-start gap-2">
+              <KeyRound className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-950 dark:text-amber-200">How to access Owner Mode:</p>
+                <p className="text-amber-900/80 dark:text-amber-300/80 mt-0.5">
+                  1. Press <kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 rounded border border-amber-300 dark:border-amber-800 font-mono font-bold">Ctrl + Shift + O</kbd> (or ⌘+Shift+O) anywhere.<br />
+                  2. Use passcode <code className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 px-1 py-0.5 rounded">owner2026</code>.<br />
+                  3. You can also append <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded">/#owner</code> to your browser URL.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            {isOwner ? (
+              <button
+                onClick={() => setActiveTab('owner-portal')}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 transition-all active:scale-98"
+              >
+                <Crown className="w-4 h-4" />
+                <span>Open Owner Control Hub</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsSecretOwnerModalOpen(true)}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 transition-all active:scale-98"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Enter Owner Passcode to Unlock</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setActiveTab('resources')}
+              className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl transition-colors"
+            >
+              Browse Student Resource Directory
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Notifications */}
+      {activeSubTab === 'notifications' && (
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Notification Preferences</h2>
+            <p className="text-xs text-slate-500">Choose when and how you receive alerts and campus opportunities.</p>
+          </div>
+
+          <div className="space-y-3 text-xs">
+            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+              <div>
+                <p className="font-bold text-slate-900 dark:text-white">Freelance Gig Matches</p>
+                <p className="text-slate-500">Notify me when a client posts a gig matching my skills stack</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifyGigs}
+                onChange={(e) => setNotifyGigs(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+              <div>
+                <p className="font-bold text-slate-900 dark:text-white">Live Masterclasses & Workshops</p>
+                <p className="text-slate-500">Reminders 15 minutes before scheduled faculty streams begin</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifyClasses}
+                onChange={(e) => setNotifyClasses(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+              <div>
+                <p className="font-bold text-slate-900 dark:text-white">Mentorship Direct Inquiries</p>
+                <p className="text-slate-500">Instant alerts when an alumni mentor responds to your request</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifyMentors}
+                onChange={(e) => setNotifyMentors(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 5: Privacy & Account */}
+      {activeSubTab === 'privacy' && (
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Security & Account Sessions</h2>
+            <p className="text-xs text-slate-500">Manage account authentication, sessions, and data storage.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Current Session</p>
+                <p className="text-[11px] text-slate-500">Logged in as {user.name} ({user.email})</p>
+              </div>
+              <button
+                onClick={() => {
+                  logout();
+                  setIsAuthModalOpen(true);
+                  showToast('Logged out of session');
+                }}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center gap-1.5 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Switch Demo User Account</p>
+                <p className="text-[11px] text-slate-500">Switch between verified student and alumni profiles</p>
+              </div>
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Switch Account</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Avatar Upload & Preset Picker Modal */}
+      {isAvatarModalOpen && (
+        <div
+          id="avatar-picker-modal-overlay"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setIsAvatarModalOpen(false)}
+        >
+          <div
+            id="avatar-picker-modal"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+          >
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Update Profile Picture</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAvatarModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Live Avatar Preview + Device Upload */}
+              <div className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <img
+                  src={avatarPreview || user.avatar}
+                  alt={name || user.name}
+                  className="w-18 h-18 rounded-2xl object-cover border-2 border-indigo-500 shadow-xs shrink-0"
+                />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{name || user.name}</p>
+                    <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono">{btId || user.btId}</p>
+                  </div>
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={isUploadingAvatar}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingAvatar ? 'Processing...' : 'Upload from Device'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Avatar Presets */}
+              <div>
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Or choose a quick preset
+                </p>
+                <div className="grid grid-cols-4 gap-2.5">
+                  {avatarPresets.map((presetUrl, index) => {
+                    const isSelected = (avatarPreview || user.avatar) === presetUrl;
+                    return (
+                      <button
+                        key={presetUrl}
+                        type="button"
+                        onClick={() => applyAvatarChange(presetUrl)}
+                        className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/30 scale-[1.02]'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                        }`}
+                        title={`Preset avatar ${index + 1}`}
+                      >
+                        <img
+                          src={presetUrl}
+                          alt={`Avatar preset ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {isSelected && (
+                          <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                            <Check className="w-2.5 h-2.5" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Image URL */}
+              <form onSubmit={handleApplyCustomAvatarUrl} className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Or paste an image URL
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="url"
+                      value={customAvatarUrl}
+                      onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                      placeholder="https://example.com/photo.jpg"
+                      className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsAvatarModalOpen(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
